@@ -10,6 +10,7 @@ English · [简体中文](README.zh-CN.md)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-black)
 ![No dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Downloads](https://img.shields.io/github/downloads/editwe/disk-health/total?color=green)
 
 <img src="screenshots/en-light.png" width="520" alt="Disk Health screenshot">
 
@@ -40,11 +41,21 @@ macOS's Disk Utility only tells you `SMART: Verified`. It never shows how much o
 - Apple Silicon (arm64)
 - An Apple-built internal SSD (the only NVMe device that exposes the SMART user client)
 
-## Install
+## Download
 
-Download or build `DiskHealth.app` and drag it into `/Applications`.
+**[Download the latest DMG →](https://github.com/editwe/disk-health/releases/latest)**
 
-The app is **ad-hoc signed**, not notarized. It runs fine when built on your own Mac. If you copy it to another Mac, Gatekeeper will complain — right-click → **Open**, or build it from source there.
+1. Open `DiskHealth-<version>-macOS-arm64.dmg`
+2. Drag **Disk Health** onto the **Applications** shortcut in the window
+3. Launch it from Applications, Launchpad or Spotlight
+
+The app is **ad-hoc signed** and not notarized. On a machine that did not build it, Gatekeeper blocks the first launch — right-click the app → **Open**, or clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DiskHealth.app
+```
+
+Only run builds you trust — or [build it yourself](#build-from-source).
 
 ## Build from source
 
@@ -108,7 +119,9 @@ Requires the Xcode Command Line Tools (`clang`, `swiftc`, `sips`, `iconutil`). N
 | `src/index.html` | UI (HTML/CSS/JS, zh + en strings) |
 | `src/Info.plist`, `src/*.lproj` | Bundle metadata and localized names |
 | `src/icon_1024.png`, `src/make_icon.py` | Icon artwork |
+| `src/dmg-background.png` | DMG window background |
 | `build.sh` | One-command build |
+| `make_dmg.sh` | Builds the drag-to-install DMG (`./make_dmg.sh 1.0.0`) |
 
 ## Limitations
 

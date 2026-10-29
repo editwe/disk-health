@@ -10,6 +10,7 @@
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-arm64-black)
 ![无依赖](https://img.shields.io/badge/dependencies-none-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-blue)
+![Downloads](https://img.shields.io/github/downloads/editwe/disk-health/total?color=green)
 
 <img src="screenshots/zh-light.png" width="520" alt="硬盘健康界面">
 
@@ -40,11 +41,21 @@ macOS 的「磁盘工具」只会告诉你 `SMART: Verified`，从不显示这�
 - Apple Silicon（arm64）
 - Apple 原厂内置 SSD（目前唯一暴露 SMART 用户客户端的 NVMe 设备）
 
-## 安装
+## 下载安装
 
-下载或自行构建 `DiskHealth.app`，拖进 `/Applications` 即可。
+**[下载最新版 DMG →](https://github.com/editwe/disk-health/releases/latest)**
 
-应用采用 **ad-hoc 签名**，未经过公证。在你自己机器上构建的可直接运行；拷到别的 Mac 上会被 Gatekeeper 拦截 —— 右键 →「打开」，或在那台机器上重新构建。
+1. 打开 `DiskHealth-<版本>-macOS-arm64.dmg`
+2. 把 **Disk Health** 拖到窗口里的 **Applications** 快捷方式上
+3. 从「应用程序」、启动台或聚焦搜索打开
+
+应用采用 **ad-hoc 签名**，未经过公证。在不是自己构建的机器上首次打开会被 Gatekeeper 拦截 —— 右键点应用 →「打开」，或清除隔离标记：
+
+```bash
+xattr -dr com.apple.quarantine /Applications/DiskHealth.app
+```
+
+请只运行你信任的构建；也可以[自己编译](#从源码构建)。
 
 ## 从源码构建
 
@@ -108,7 +119,9 @@ open build/DiskHealth.app
 | `src/index.html` | 界面（HTML/CSS/JS，中英文案） |
 | `src/Info.plist`、`src/*.lproj` | 包元数据与本地化名称 |
 | `src/icon_1024.png`、`src/make_icon.py` | 图标原图与生成脚本 |
+| `src/dmg-background.png` | DMG 窗口背景 |
 | `build.sh` | 一键构建 |
+| `make_dmg.sh` | 生成拖拽安装的 DMG（`./make_dmg.sh 1.0.0`） |
 
 ## 已知限制
 
