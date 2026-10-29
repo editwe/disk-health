@@ -142,6 +142,7 @@
   }
   button:hover { background: var(--tile); }
   button:active { transform: translateY(.5px); }
+  button:disabled { opacity: .55; }
 
   .fade { animation: fade .28s ease both; }
   @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
@@ -215,7 +216,7 @@
       remain: "剩余寿命", wear: "磨损计数", spare: "备用块", temp: "温度",
       written: "累计写入", read: "累计读取", hours: "通电时间", cycles: "开关机次数",
       unsafe: "异常断电", errors: "介质错误 / 错误日志",
-      storage: "存储空间", refresh: "刷新",
+      storage: "存储空间", refresh: "刷新", refreshBusy: "刷新中…", refreshFailed: "刷新失败，请重试",
       stOk: "状态良好", stWarn: "轻度损耗", stBad: "需要关注", stErr: "无法读取",
       hOk: "这块硬盘还很健康", hWarn: "有轻微损耗，建议定期检查", hBad: "这块硬盘需要尽快备份",
       errTitle: "读不到硬盘健康数据", errHint: "请稍后重试。",
@@ -235,7 +236,7 @@
       remain: "Life remaining", wear: "Wear level", spare: "Spare blocks", temp: "Temperature",
       written: "Total written", read: "Total read", hours: "Power-on time", cycles: "Power cycles",
       unsafe: "Unsafe shutdowns", errors: "Media errors / log",
-      storage: "Storage", refresh: "Refresh",
+      storage: "Storage", refresh: "Refresh", refreshBusy: "Refreshing…", refreshFailed: "Refresh failed — try again",
       stOk: "Healthy", stWarn: "Aging", stBad: "Attention", stErr: "Unavailable",
       hOk: "This drive is in great shape", hWarn: "Light wear — worth a periodic check", hBad: "Back up this drive soon",
       errTitle: "Couldn't read drive health", errHint: "Please try again in a moment.",
@@ -259,6 +260,23 @@
     const digits = v < 10 ? 2 : (v < 100 ? 1 : 0);
     return v.toFixed(digits) + " " + units[i];
   }
+
+  let currentStrings = STRINGS.en;
+  let isRefreshing = false;
+
+  window.setRefreshing = function (on) {
+    isRefreshing = !!on;
+    const b = $("refreshBtn");
+    if (!b) return;
+    b.disabled = !!on;
+    if (on) b.textContent = currentStrings.refreshBusy;
+    else b.textContent = currentStrings.refresh;
+  };
+  window.endRefresh = function () { window.setRefreshing(false); };
+  window.renderFailed = function () {
+    window.endRefresh();
+    $("updated").textContent = currentStrings.refreshFailed;
+  };
 
   function applyStatic(s) {
     $("remainLabel").textContent = s.remain;
@@ -286,6 +304,7 @@
   window.render = function (d, meta) {
     meta = meta || {};
     const s = STRINGS[meta.lang === "zh" ? "zh" : "en"];
+    currentStrings = s;
     document.documentElement.lang = meta.lang === "zh" ? "zh-Hans" : "en";
     applyStatic(s);
 
@@ -298,6 +317,7 @@
       $("detail").textContent = (d && d.error) || s.errHint;
       $("remain").textContent = "--";
       $("updated").textContent = "";
+      window.endRefresh();
       return;
     }
 
@@ -357,12 +377,19 @@
 
     const locale = meta.lang === "zh" ? "zh-CN" : "en-US";
     const now = new Date();
-    $("updated").textContent = s.updated(now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }));
+    $("updated").textContent = s.updated(now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", second: "2-digit" }));
+    window.endRefresh();
   };
 
-  $("refreshBtn").addEventListener("click", () => {
-    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.refresh) {
-      window.webkit.messageHandlers.refresh.postMessage("refresh");
+  document.addEventListener("click", (event) => {
+    const btn = event.target && event.target.closest ? event.target.closest("#refreshBtn") : null;
+    if (!btn || btn.disabled || isRefreshing) return;
+    const bridge = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.refresh;
+    if (bridge) {
+      window.setRefreshing(true);
+      bridge.postMessage("refresh");
+    } else {
+      location.reload();   // fallback: reload re-triggers the native read
     }
   });
 </script>

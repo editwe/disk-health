@@ -1,10 +1,20 @@
 import AppKit
 import WebKit
 
+/// WKWebView that accepts the very first click even when the window is not key,
+/// so the refresh button never feels "dead" right after switching apps.
+final class ClickThroughWebView: WKWebView {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
 
     private var window: NSWindow!
-    private var webView: WKWebView!
+    private var webView: ClickThroughWebView!
+
+    /// Serializes SMART reads: the C helper returns a static buffer.
+    private let healthQueue = DispatchQueue(label: "com.ch.diskhealth.reader")
+    private var isRefreshing = false
 
     /// UI language: follows the system, can be forced with DH_LANG=zh|en.
     private let isChinese: Bool = {
@@ -25,7 +35,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         config.userContentController.add(self, name: "refresh")
         config.websiteDataStore = .nonPersistent()
 
-        webView = WKWebView(frame: .zero, configuration: config)
+        webView = ClickThroughWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = self
         if #available(macOS 12.0, *) {
             webView.underPageBackgroundColor = .windowBackgroundColor
@@ -40,7 +50,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
         window.title = t("硬盘健康", "Disk Health")
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
-        window.isMovableByWindowBackground = true
         window.backgroundColor = .windowBackgroundColor
         window.minSize = NSSize(width: 540, height: 600)
         window.contentView = webView
@@ -99,17 +108,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
 
     // MARK: - Data
 
-    private func inject() {
-        let json = String(cString: dh_read_health_json())
-        let meta = "{\"total\":\(volumeCapacity().total),\"free\":\(volumeCapacity().free),"
-                 + "\"lang\":\"\(isChinese ? "zh" : "en")\","
-                 + "\"redact\":\(ProcessInfo.processInfo.environment["DH_REDACT"] != nil)}"
-        webView.evaluateJavaScript("window.render(\(json), \(meta));") { _, error in
-            if let error {
-                NSLog("render failed: %@", error.localizedDescription)
+    /// Reads SMART data off the main thread, so a slow IOKit call can never
+    /// freeze the window (which looked like a dead refresh button).
+    private func inject(showSpinner: Bool = true) {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        if showSpinner {
+            webView.evaluateJavaScript("window.setRefreshing && window.setRefreshing(true);")
+        }
+
+        healthQueue.async { [weak self] in
+            guard let self else { return }
+            let json = String(cString: dh_read_health_json())
+            let capacity = self.volumeCapacity()
+            let meta = "{\"total\":\(capacity.total),\"free\":\(capacity.free),"
+                     + "\"lang\":\"\(self.isChinese ? "zh" : "en")\","
+                     + "\"redact\":\(ProcessInfo.processInfo.environment["DH_REDACT"] != nil)}"
+
+            DispatchQueue.main.async {
+                self.webView.evaluateJavaScript("window.render(\(json), \(meta));") { _, error in
+                    if let error {
+                        NSLog("render failed: %@", error.localizedDescription)
+                        self.webView.evaluateJavaScript("window.renderFailed && window.renderFailed();")
+                    }
+                    self.isRefreshing = false
+                    self.webView.evaluateJavaScript("window.endRefresh && window.endRefresh();")
+                    self.captureIfRequested()
+                }
             }
         }
-        captureIfRequested()
     }
 
     private func volumeCapacity() -> (total: Int64, free: Int64) {
@@ -123,7 +150,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     /// Debug hook: DH_SNAPSHOT=/path/out.png renders once, saves a snapshot and quits.
     private func captureIfRequested() {
         guard let path = ProcessInfo.processInfo.environment["DH_SNAPSHOT"] else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
             let config = WKSnapshotConfiguration()
             config.rect = self.webView.bounds
             self.webView.takeSnapshot(with: config) { image, error in
@@ -143,7 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
     // MARK: - WKNavigationDelegate / WKScriptMessageHandler
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        inject()
+        inject(showSpinner: false)
     }
 
     func userContentController(_ userContentController: WKUserContentController,

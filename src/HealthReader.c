@@ -77,7 +77,9 @@ const char *dh_read_health_json(void)
         IONVMeSMARTInterface **smart = NULL;
         CFUUIDBytes uuid = CFUUIDGetUUIDBytes(kIONVMeSMARTInterfaceID);
         if ((*plug)->QueryInterface(plug, uuid, (LPVOID *)&smart) != S_OK || !smart) {
-            (*plug)->Release(plug);
+            /* IODestroyPlugInInterface closes the underlying user client;
+               a plain Release() leaves it open and breaks the next read. */
+            IODestroyPlugInInterface(plug);
             IOObjectRelease(svc);
             continue;
         }
@@ -87,7 +89,7 @@ const char *dh_read_health_json(void)
         IOReturn r = (*smart)->SMARTReadData(smart, &d);
         if (r != kIOReturnSuccess) {
             (*smart)->Release(smart);
-            (*plug)->Release(plug);
+            IODestroyPlugInInterface(plug);
             IOObjectRelease(svc);
             continue;
         }
@@ -146,7 +148,7 @@ const char *dh_read_health_json(void)
             (unsigned long long)d.HOST_READ_COMMANDS[0]);
 
         (*smart)->Release(smart);
-        (*plug)->Release(plug);
+        IODestroyPlugInInterface(plug);
         IOObjectRelease(svc);
         IOObjectRelease(iter);
         return g_json;
