@@ -7,26 +7,14 @@ final class ClickThroughWebView: WKWebView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-/// Transparent strip across the top of the window that lets you drag it.
-/// With .fullSizeContentView the web view covers the whole window, so without
-/// this there is no draggable area at all.
-final class DragBarView: NSView {
-    override var mouseDownCanMoveWindow: Bool { true }
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-}
-
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
 
     private var window: NSWindow!
     private var webView: ClickThroughWebView!
-    private var dragBar: DragBarView!
 
     /// Serializes SMART reads: the C helper returns a static buffer.
     private let healthQueue = DispatchQueue(label: "com.ch.diskhealth.reader")
     private var isRefreshing = false
-
-    /// Matches the web page's top padding: the drag strip sits entirely in it.
-    private let dragStripHeight: CGFloat = 40
 
     /// UI language: follows the system, can be forced with DH_LANG=zh|en.
     private let isChinese: Bool = {
@@ -53,40 +41,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate, 
             webView.underPageBackgroundColor = .windowBackgroundColor
         }
 
-        dragBar = DragBarView(frame: .zero)
-        dragBar.wantsLayer = true
-        dragBar.layer?.backgroundColor = NSColor.clear.cgColor
-
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 658))
-        container.autoresizingMask = [.width, .height]
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        dragBar.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(webView)
-        container.addSubview(dragBar)
-        NSLayoutConstraint.activate([
-            webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: container.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-
-            dragBar.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            dragBar.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            dragBar.topAnchor.constraint(equalTo: container.topAnchor),
-            dragBar.heightAnchor.constraint(equalToConstant: dragStripHeight),
-        ])
-
+        // A real (but transparent, title-less) titlebar: dragging it is handled
+        // by AppKit itself, so the window can always be moved. The web view
+        // lives below it instead of covering the whole window.
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 658),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 630),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = t("硬盘健康", "Disk Health")
         window.titlebarAppearsTransparent = true
         window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
         window.backgroundColor = .windowBackgroundColor
-        window.minSize = NSSize(width: 540, height: 600)
-        window.contentView = container
+        window.minSize = NSSize(width: 540, height: 580)
+        window.contentView = webView
         if ProcessInfo.processInfo.environment["DH_DARK"] != nil {
             window.appearance = NSAppearance(named: .darkAqua)
         }
