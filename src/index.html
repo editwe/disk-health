@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disk Health</title>
+<style>
+  :root {
+    --bg: #f2f3f5;
+    --card: #ffffff;
+    --tile: #f5f6f8;
+    --text: #1c1c1e;
+    --sub: #75757c;
+    --line: rgba(0,0,0,.07);
+    --track: #e6e7eb;
+    --accent: #34c759;
+    --accent-soft: rgba(52,199,89,.14);
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1b1b1d;
+      --card: #262629;
+      --tile: #2e2e32;
+      --text: #f2f2f7;
+      --sub: #9a9aa1;
+      --line: rgba(255,255,255,.08);
+      --track: #3a3a3f;
+      --accent: #30d158;
+      --accent-soft: rgba(48,209,88,.16);
+      --shadow: 0 1px 2px rgba(0,0,0,.25);
+    }
+  }
+  @property --deg { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 -apple-system, "SF Pro Text", "PingFang SC", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    cursor: default;
+    overflow-y: auto;
+  }
+  b, strong { font-weight: 600; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  .app {
+    padding: 38px 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-height: 100vh;
+  }
+
+  .hd { display: flex; align-items: center; gap: 11px; padding: 0 2px; }
+  .badge {
+    width: 42px; height: 42px; border-radius: 11px;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; flex: none;
+  }
+  .badge svg { width: 22px; height: 22px; }
+  .titles { min-width: 0; flex: 1; }
+  .titles h1 { font-size: 14px; font-weight: 600; letter-spacing: .1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .titles p { font-size: 11px; color: var(--sub); margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 5px 11px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 16px; box-shadow: var(--shadow);
+  }
+
+  .hero { display: flex; align-items: center; gap: 21px; padding: 18px 18px 18px 16px; }
+  .ring {
+    --deg: 360deg;
+    position: relative; flex: none;
+    width: 152px; height: 152px; border-radius: 50%;
+    background: conic-gradient(var(--accent) 0 var(--deg), var(--track) var(--deg) 360deg);
+    transition: --deg .9s cubic-bezier(.22,.9,.3,1);
+  }
+  .ring::after {
+    content: ""; position: absolute; inset: 14px; border-radius: 50%;
+    background: var(--card);
+  }
+  .ring-core {
+    position: absolute; inset: 0; z-index: 1;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px;
+  }
+  .ring-core b { font-size: 31px; font-weight: 600; letter-spacing: -.5px; line-height: 1.05; }
+  .ring-core span { font-size: 10.5px; color: var(--sub); text-align: center; padding: 0 18px; }
+
+  .hero-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+  .hero-info h2 { font-size: 15px; font-weight: 600; }
+  .hero-info p { font-size: 11.5px; color: var(--sub); line-height: 1.55; }
+
+  .mini { display: flex; gap: 18px; margin-top: 4px; padding-top: 11px; border-top: 1px solid var(--line); }
+  .mini div { display: flex; flex-direction: column; gap: 1px; }
+  .mini span { font-size: 10px; color: var(--sub); }
+  .mini b { font-size: 14px; font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .tile {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 12px 12px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .tile span { font-size: 10.5px; color: var(--sub); }
+  .tile b { font-size: 15px; font-weight: 600; letter-spacing: -.1px; }
+  .tile.warn b { color: #ff9f0a; }
+
+  .storage { padding: 14px 15px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .storage .row { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; gap: 12px; }
+  .storage .row .sub { color: var(--sub); font-size: 11px; white-space: nowrap; }
+  .bar { height: 7px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .bar i {
+    display: block; height: 100%; width: 0%; border-radius: 99px;
+    background: var(--accent); opacity: .85;
+    transition: width .8s cubic-bezier(.22,.9,.3,1);
+  }
+  .bar.hot i { background: linear-gradient(90deg, #ff9f0a, #ff453a); opacity: 1; }
+
+  .ft { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 2px 2px 0; }
+  .ft .time { font-size: 10.5px; color: var(--sub); }
+  .ft .spacer { flex: 1; }
+  button {
+    font: inherit; font-size: 11.5px; color: var(--text);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 7px; padding: 4px 11px;
+    box-shadow: 0 1px 0 var(--line);
+  }
+  button:hover { background: var(--tile); }
+  button:active { transform: translateY(.5px); }
+
+  .fade { animation: fade .28s ease both; }
+  @keyframes fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hd">
+    <div class="badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="3"></rect>
+        <circle cx="12" cy="12" r="3.2"></circle>
+      </svg>
+    </div>
+    <div class="titles">
+      <h1 id="model">—</h1>
+      <p id="sub"></p>
+    </div>
+    <div class="pill" id="pill"><i></i><span id="pillText"></span></div>
+  </header>
+
+  <main id="main" class="fade">
+    <section class="card hero" style="margin-bottom:14px">
+      <div class="ring" id="ring">
+        <div class="ring-core">
+          <b id="remain">--</b>
+          <span id="remainLabel"></span>
+        </div>
+      </div>
+      <div class="hero-info">
+        <h2 id="headline"></h2>
+        <p id="detail"></p>
+        <div class="mini">
+          <div><span id="wearLabel"></span><b id="used" class="num">--</b></div>
+          <div><span id="spareLabel"></span><b id="spare" class="num">--</b></div>
+          <div><span id="tempLabel"></span><b id="temp" class="num">--</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="tile"><span id="writtenLabel"></span><b id="written" class="num">--</b></div>
+      <div class="tile"><span id="readLabel"></span><b id="read" class="num">--</b></div>
+      <div class="tile"><span id="hoursLabel"></span><b id="hours" class="num">--</b></div>
+      <div class="tile"><span id="cyclesLabel"></span><b id="cycles" class="num">--</b></div>
+      <div class="tile" id="unsafeTile"><span id="unsafeLabel"></span><b id="unsafe" class="num">--</b></div>
+      <div class="tile" id="errTile"><span id="errorsLabel"></span><b id="errors" class="num">--</b></div>
+    </section>
+
+    <section class="card storage" style="margin-top:14px">
+      <div class="row"><span id="storageLabel"></span><span class="sub" id="capText"></span></div>
+      <div class="bar" id="bar"><i id="barFill"></i></div>
+    </section>
+  </main>
+
+  <footer class="ft">
+    <span class="time" id="updated"></span>
+    <span class="spacer"></span>
+    <button id="refreshBtn"></button>
+  </footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const ACCENTS = { ok: "#34c759", warn: "#ff9f0a", bad: "#ff453a" };
+
+  const STRINGS = {
+    zh: {
+      title: "硬盘健康",
+      serial: "序列号", firmware: "固件", smartSub: "NVMe SMART 健康日志",
+      remain: "剩余寿命", wear: "磨损计数", spare: "备用块", temp: "温度",
+      written: "累计写入", read: "累计读取", hours: "通电时间", cycles: "开关机次数",
+      unsafe: "异常断电", errors: "介质错误 / 错误日志",
+      storage: "存储空间", refresh: "刷新",
+      stOk: "状态良好", stWarn: "轻度损耗", stBad: "需要关注", stErr: "无法读取",
+      hOk: "这块硬盘还很健康", hWarn: "有轻微损耗，建议定期检查", hBad: "这块硬盘需要尽快备份",
+      errTitle: "读不到硬盘健康数据", errHint: "请稍后重试。",
+      detailOk: (w, used) => `已累计写入 ${w}，硬盘自身报告的磨损为 ${used}%，没有检测到介质错误。正常使用下距离寿命终点还很远。`,
+      detailMedia: (n) => `检测到 ${n} 个介质错误，请尽快备份重要数据。`,
+      detailBad: "磨损或告警指标已超出安全范围，请立刻备份重要数据。",
+      cap: (free, total) => `可用 ${free} / 共 ${total}`,
+      updated: (t) => `更新于 ${t}`,
+      hoursUnit: (h) => h < 1000 ? `${h} 小时` : (h < 10000 ? `${(h / 1000).toFixed(1)} 千小时` : `${(h / 10000).toFixed(2)} 万小时`),
+      cyclesUnit: (n) => `${n} 次`,
+      unsafeUnit: (n) => `${n} 次`,
+      redacted: "••••••••••••"
+    },
+    en: {
+      title: "Disk Health",
+      serial: "S/N", firmware: "Firmware", smartSub: "NVMe SMART health log",
+      remain: "Life remaining", wear: "Wear level", spare: "Spare blocks", temp: "Temperature",
+      written: "Total written", read: "Total read", hours: "Power-on time", cycles: "Power cycles",
+      unsafe: "Unsafe shutdowns", errors: "Media errors / log",
+      storage: "Storage", refresh: "Refresh",
+      stOk: "Healthy", stWarn: "Aging", stBad: "Attention", stErr: "Unavailable",
+      hOk: "This drive is in great shape", hWarn: "Light wear — worth a periodic check", hBad: "Back up this drive soon",
+      errTitle: "Couldn't read drive health", errHint: "Please try again in a moment.",
+      detailOk: (w, used) => `${w} written so far, ${used}% wear reported by the drive itself, and no media errors. It's nowhere near its endurance limit.`,
+      detailMedia: (n) => `${n} media errors detected — back up your data now.`,
+      detailBad: "Wear or warning indicators are beyond the safe range. Back up your data immediately.",
+      cap: (free, total) => `${free} free of ${total}`,
+      updated: (t) => `Updated ${t}`,
+      hoursUnit: (h) => h < 1000 ? `${h} h` : (h < 10000 ? `${(h / 1000).toFixed(1)}k h` : `${(h / 10000).toFixed(2)} ×10k h`),
+      cyclesUnit: (n) => `${n}`,
+      unsafeUnit: (n) => `${n}`,
+      redacted: "••••••••••••"
+    }
+  };
+
+  function fmtBytes(b) {
+    if (!b || b <= 0) return "0 GB";
+    const units = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let i = 0, v = b;
+    while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
+    const digits = v < 10 ? 2 : (v < 100 ? 1 : 0);
+    return v.toFixed(digits) + " " + units[i];
+  }
+
+  function applyStatic(s) {
+    $("remainLabel").textContent = s.remain;
+    $("wearLabel").textContent = s.wear;
+    $("spareLabel").textContent = s.spare;
+    $("tempLabel").textContent = s.temp;
+    $("writtenLabel").textContent = s.written;
+    $("readLabel").textContent = s.read;
+    $("hoursLabel").textContent = s.hours;
+    $("cyclesLabel").textContent = s.cycles;
+    $("unsafeLabel").textContent = s.unsafe;
+    $("errorsLabel").textContent = s.errors;
+    $("storageLabel").textContent = s.storage;
+    $("refreshBtn").textContent = s.refresh;
+    document.title = s.title;
+  }
+
+  function setAccent(kind) {
+    document.documentElement.style.setProperty("--accent", ACCENTS[kind]);
+    const soft = kind === "ok" ? "rgba(52,199,89,.14)"
+               : (kind === "warn" ? "rgba(255,159,10,.16)" : "rgba(255,69,58,.16)");
+    document.documentElement.style.setProperty("--accent-soft", soft);
+  }
+
+  window.render = function (d, meta) {
+    meta = meta || {};
+    const s = STRINGS[meta.lang === "zh" ? "zh" : "en"];
+    document.documentElement.lang = meta.lang === "zh" ? "zh-Hans" : "en";
+    applyStatic(s);
+
+    if (!d || !d.ok) {
+      setAccent("warn");
+      $("pillText").textContent = s.stErr;
+      $("model").textContent = "—";
+      $("sub").textContent = s.smartSub;
+      $("headline").textContent = s.errTitle;
+      $("detail").textContent = (d && d.error) || s.errHint;
+      $("remain").textContent = "--";
+      $("updated").textContent = "";
+      return;
+    }
+
+    const used = Math.min(100, Math.max(0, d.percentageUsed | 0));
+    const remain = 100 - used;
+    const spare = d.availableSpare | 0;
+    const temp = Math.round(d.temperatureC || 0);
+    const mediaErrors = d.mediaErrors || 0;
+    const unsafe = d.unsafeShutdowns || 0;
+
+    let kind = "ok";
+    if ((d.criticalWarning | 0) !== 0 || mediaErrors > 0 || used >= 90) kind = "bad";
+    else if (used >= 70 || (spare > 0 && spare < 50) || temp >= 65) kind = "warn";
+    setAccent(kind);
+
+    $("pillText").textContent = kind === "bad" ? s.stBad : (kind === "warn" ? s.stWarn : s.stOk);
+    $("headline").textContent = kind === "bad" ? s.hBad : (kind === "warn" ? s.hWarn : s.hOk);
+
+    $("model").textContent = d.model || "SSD";
+
+    const bits = [];
+    const serial = meta.redact ? s.redacted : d.serial;
+    if (serial) bits.push(s.serial + " " + serial);
+    if (d.firmware) bits.push(s.firmware + " " + d.firmware);
+    $("sub").textContent = bits.join("  ·  ") || s.smartSub;
+
+    $("detail").textContent = kind === "bad"
+      ? (mediaErrors > 0 ? s.detailMedia(mediaErrors) : s.detailBad)
+      : s.detailOk(fmtBytes(d.writtenBytes), used);
+
+    $("remain").textContent = remain + "%";
+    $("used").textContent = used + "%";
+    $("spare").textContent = spare + "%";
+    $("temp").textContent = temp + " °C";
+
+    const ring = $("ring");
+    ring.style.setProperty("--deg", "0deg");
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      ring.style.setProperty("--deg", (remain * 3.6) + "deg");
+    }));
+
+    $("written").textContent = fmtBytes(d.writtenBytes);
+    $("read").textContent = fmtBytes(d.readBytes);
+    $("hours").textContent = s.hoursUnit(d.powerOnHours || 0);
+    $("cycles").textContent = s.cyclesUnit(d.powerCycles || 0);
+    $("unsafe").textContent = s.unsafeUnit(unsafe);
+    $("unsafeTile").classList.toggle("warn", unsafe >= 20);
+    $("errors").textContent = mediaErrors + " / " + (d.errorLogEntries || 0);
+    $("errTile").classList.toggle("warn", mediaErrors > 0);
+
+    const total = meta.total || 0, free = meta.free || 0;
+    const usedCap = Math.max(0, total - free);
+    const frac = total > 0 ? usedCap / total : 0;
+    $("barFill").style.width = (frac * 100).toFixed(1) + "%";
+    $("bar").classList.toggle("hot", frac > 0.9);
+    $("capText").textContent = total > 0 ? s.cap(fmtBytes(free), fmtBytes(total)) : "";
+
+    const locale = meta.lang === "zh" ? "zh-CN" : "en-US";
+    const now = new Date();
+    $("updated").textContent = s.updated(now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }));
+  };
+
+  $("refreshBtn").addEventListener("click", () => {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.refresh) {
+      window.webkit.messageHandlers.refresh.postMessage("refresh");
+    }
+  });
+</script>
+</body>
+</html>
